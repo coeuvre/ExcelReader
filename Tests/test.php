@@ -56,11 +56,11 @@ $columnDefines = array(
     ),
 );
 
-$test_files = array('test_0.csv', 'test_1.csv');
+$testFiles = array('test_0.csv', 'test_1.csv');
 
 $callStartTime = microtime(true);
 
-foreach ($test_files as $file) {
+foreach ($testFiles as $file) {
     echo "---------------------- Reading $file -------------------------" . EOL;
     $reader = new ExcelReader($file, $columnDefines);
     while (!$reader->finished()) {
@@ -76,6 +76,7 @@ foreach ($test_files as $file) {
             }
 
             echo 'Successfully read rows: ' . count($data['list']) . EOL;
+            /*
             // echo the last time read data
             echo '<table>' . "\n";
             foreach ($data['list'] as $row) {
@@ -86,6 +87,7 @@ foreach ($test_files as $file) {
                 echo '</tr>' . "\n";
             }
             echo '</table>' . "\n";
+            */
         }
     }
 
