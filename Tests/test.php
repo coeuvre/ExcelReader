@@ -8,38 +8,93 @@ ini_set('max_execution_time', 3600);
 
 require_once dirname(__FILE__) . '/../ExcelReader.php';
 
+define('EOL',(PHP_SAPI == 'cli') ? PHP_EOL : '<br />');
+
 //$cacheMethod = PHPExcel_CachedObjectStorageFactory::cache_in_memory_gzip;
 //PHPExcel_Settings::setCacheStorageMethod($cacheMethod);
 
+$columnDefines = array(
+    array(
+        'required' => true,
+        'type' => 'string',
+        'name' => 'id',
+        'key' => 'c1',
+    ),
+
+    array(
+        'required' => true,
+        'type' => 'string',
+        'name' => 'useremail',
+        'key' => 'c2',
+    ),
+
+    array(
+        'required' => true,
+        'type' => 'string',
+        'name' => 'ebayListingID',
+        'key' => 'c3',
+    ),
+
+    array(
+        'required' => true,
+        'type' => 'string',
+        'name' => 'title',
+        'key' => 'c4',
+    ),
+
+    array(
+        'required' => true,
+        'type' => 'date',
+        'name' => 'startTime',
+        'key' => 'c5',
+    ),
+
+    array(
+        'required' => true,
+        'type' => 'float',
+        'name' => 'ConvertedStartPrice',
+    ),
+);
+
+$test_files = array('test_0.csv', 'test_1.csv');
+
 $callStartTime = microtime(true);
 
-$reader = new ExcelReader('test.xls', null);
-while (!$reader->finished()) {
-    $data = $reader->read();
-    // ...
-}
+foreach ($test_files as $file) {
+    echo "---------------------- Reading $file -------------------------" . EOL;
+    $reader = new ExcelReader($file, $columnDefines);
+    while (!$reader->finished()) {
+        $data = $reader->read();
 
-$callEndTime = microtime(true);
+        if ($data['error']) {
+            foreach ($data['error'] as $error) {
+                echo "Error: $error" . EOL;
+            }
+        } else {
+            foreach ($data['warn'] as $warn) {
+                echo "Warn: $warn" . EOL;
+            }
 
-$callTime = $callEndTime - $callStartTime;
-
-define('EOL',(PHP_SAPI == 'cli') ? PHP_EOL : '<br />');
-
-echo 'Call time to read Workbook was ' , sprintf('%.4f',$callTime) , " seconds" , EOL;
-// Echo memory usage
-echo 'Current memory usage: ' , (memory_get_usage(true) / 1024 / 1024) , " MB" , EOL;
-
-echo 'Total rows: ' . count($data);
-
-
-// echo the last time read data
-
-echo '<table>' . "\n";
-foreach ($data as $row) {
-    echo '<tr>' . "\n";
-    foreach ($row as $cell) {
-        echo '<td>' . $cell . '</td>' . "\n";
+            echo 'Successfully read rows: ' . count($data['list']) . EOL;
+            // echo the last time read data
+            echo '<table>' . "\n";
+            foreach ($data['list'] as $row) {
+                echo '<tr>' . "\n";
+                foreach ($row as $key => $value) {
+                    echo '<td>' . "[$key]" . $value . '</td>' . "\n";
+                }
+                echo '</tr>' . "\n";
+            }
+            echo '</table>' . "\n";
+        }
     }
-    echo '</tr>' . "\n";
+
+    $callEndTime = microtime(true);
+
+    $callTime = $callEndTime - $callStartTime;
+
+    echo EOL;
+    echo "Cost time: ", sprintf('%.4f', $callTime), " seconds", EOL;
+    echo 'Memory usage: ', (memory_get_usage(true) / 1024 / 1024), " MB", EOL;
+    echo EOL . EOL . EOL;
 }
-echo '</table>' . "\n";

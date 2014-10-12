@@ -36,9 +36,11 @@ class ExcelReader {
     private $columnDefines;
     private $step;
 
-    private $isEnd;
-    private $pos;
+    private $finished = false;
+    private $pos = self::FIRST_ROW;
     private $reader;
+
+    private $columnExisted = array();
 
     /**
      * @param string    $file           filename of an excel file
@@ -50,8 +52,6 @@ class ExcelReader {
         $this->columnDefines = $columnDefines;
         $this->step = $step;
 
-        $this->pos = 0;
-        $this->isEnd = false;
         $this->reader = PHPExcel_IOFactory::createReaderForFile($file);
         //$this->reader->setReadDataOnly(true);
     }
@@ -69,7 +69,7 @@ class ExcelReader {
      * @return bool
      */
     public function finished() {
-        return $this->isEnd;
+        return $this->finished;
     }
 
     /**
@@ -78,6 +78,16 @@ class ExcelReader {
      * @return array
      */
     public function read() {
+        if ($this->finished) {
+            return null;
+        }
+
+        $result = array(
+            'list' => array(),
+            'error' => array(),
+            'warn' => array(),
+        );
+
         $end = $this->pos + $this->step;
         if ($this->pos == self::FIRST_ROW) {
             // the first line is title, read one more row
@@ -91,23 +101,46 @@ class ExcelReader {
         $worksheet = $excel->getActiveSheet();
         $highestRow = $worksheet->getHighestRow();
         if ($highestRow + 1 < $end) {
-            $this->isEnd = true;
+            $this->finished = true;
         }
 
         $highestColumn = $worksheet->getHighestColumn();
         $highestColumn = PHPExcel_Cell::columnIndexFromString($highestColumn);
 
-        $result = array();
+        // parse the title
+        if ($this->pos == self::FIRST_ROW) {
+            $titles = array();
+            for ($col = 0; $col <= $highestColumn; ++$col) {
+                $titles[] = $worksheet->getCellByColumnAndRow($col, self::FIRST_ROW)->getValue();
+            }
+            $result['error'] = $this->parseTitle($titles);
+            $this->pos += 1;
+        }
+
+        if (count($result['error'])) {
+            $this->finished = true;
+            return $result;
+        }
 
         // read the data into `result`
-        //
-        // NOTE: Skip the first row which is the title
-        for ($row = $this->pos == self::FIRST_ROW ? self::FIRST_ROW + 1 : $this->pos; $row <= $highestRow; ++$row) {
+        for ($row = $this->pos; $row <= $highestRow; ++$row) {
             $rowData = array();
-            for ($col = 0; $col <= $highestColumn; ++$col) {
-                $rowData[] = $worksheet->getCellByColumnAndRow($col, $row)->getValue();
+            $warns = array();
+            for ($col = 0; $col <= $highestColumn && $col < count($this->columnDefines) && $this->columnExisted[$col]; ++$col) {
+                $cell = $worksheet->getCellByColumnAndRow($col, $row);
+
+                $warn = $this->checkType($cell, $col, $row);
+                if ($warn) {
+                    $warns[] = $warn;
+                }
+
+                $rowData[$this->columnDefines[$col]['key']] = $cell->getValue();
             }
-            $result[] = $rowData;
+            if (count($warns)) {
+                $result['warn'] = array_merge($result['warn'], $warns);
+            } else {
+                $result['list'][] = $rowData;
+            }
         }
 
         // release the memory
@@ -115,6 +148,66 @@ class ExcelReader {
 
         $this->pos = $end;
         return $result;
+    }
+
+    /**
+     * Check the title of excel according to `columnDefines`
+     *
+     * @param $titles array     the titles in excel
+     * @return array            error messages
+     */
+    private function parseTitle($titles) {
+        $errors = array();
+
+        for ($i = 0; $i < count($this->columnDefines); ++$i) {
+            if (!isset($this->columnDefines[$i]['key']) || $this->columnDefines[$i]['key'] == '') {
+                $this->columnDefines[$i]['key'] = $this->columnDefines[$i]['name'];
+            }
+
+            if ($i >= count($titles)) {
+                $errors[] = "Can't find column `" . $this->columnDefines[$i]['name'] . "`";
+                $this->columnExisted[$i] = false;
+                continue;
+            }
+
+            if ($this->columnDefines[$i]['name'] != $titles[$i]) {
+                if ($this->columnDefines[$i]['required'] == true) {
+                    $errors[] = "Can't find column `" . $this->columnDefines[$i]['name'] . "`";
+                }
+                $this->columnExisted[$i] = false;
+            } else {
+                $this->columnExisted[$i] = true;
+            }
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Check the data type of a cell according to `columnDefines`
+     *
+     * @param $cell PHPExcel_Cell   cell to be checked
+     * @param $col  integer         col index
+     * @param $row  integer         row index
+     * @return string               warning message
+     */
+    private function checkType($cell, $col, $row) {
+        $warn = '';
+        if ($this->columnDefines[$col]['required'] == true && $this->isTypeNull($cell)) {
+            $warn = "In row $row, `" . $this->columnDefines[$col]['name'] . "` can't be NULL";
+        }
+
+        return $warn;
+    }
+
+    /**
+     * Whether the data type of cell is NULL
+     *
+     * @param $cell PHPExcel_Cell
+     * @return bool
+     */
+    private function isTypeNull($cell) {
+        return ($cell->getDataType() == PHPExcel_Cell_DataType::TYPE_NULL || $cell->getValue() == 'NULL');
     }
 }
 
