@@ -6,6 +6,8 @@ ini_set('display_startup_errors', TRUE);
 ini_set('memory_limit', '2048M');
 ini_set('max_execution_time', 3600);
 
+date_default_timezone_set("asia/shanghai");
+
 require_once dirname(__FILE__) . '/../ExcelReader.php';
 
 define('EOL',(PHP_SAPI == 'cli') ? PHP_EOL : '<br />');
@@ -16,7 +18,7 @@ define('EOL',(PHP_SAPI == 'cli') ? PHP_EOL : '<br />');
 $columnDefines = array(
     array(
         'required' => true,
-        'type' => 'string',
+        'type' => 'int',
         'name' => 'id',
         'key' => 'c1',
     ),

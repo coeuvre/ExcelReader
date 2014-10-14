@@ -44,7 +44,12 @@ class ExcelReader {
 
     /**
      * @param string    $file           filename of an excel file
-     * @param array     $columnDefines
+     * @param array     $columnDefines  {
+     *                                      "required"  => true | false,
+     *                                      "type"      => "string" | "int" | "float" | "date" | "time"
+     *                                      "name"      => string
+     *                                      "key"       => string
+     *                                  }
      * @param integer   $step           optional, how many rows the reader read each time.
      */
     public function __construct($file, $columnDefines, $step = 1024) {
@@ -193,8 +198,42 @@ class ExcelReader {
      */
     private function checkType($cell, $col, $row) {
         $warn = '';
-        if ($this->columnDefines[$col]['required'] == true && $this->isTypeNull($cell)) {
-            $warn = "In row $row, `" . $this->columnDefines[$col]['name'] . "` can't be NULL";
+        if ($this->columnDefines[$col]['required']) {
+            if (self::isTypeNull($cell)) {
+                $warn = "[$row, " . $this->columnDefines[$col]['name'] . "] can't be NULL";
+            } else {
+                switch ($this->columnDefines[$col]['type']) {
+                    case "string":
+                        if (!self::isTypeString($cell)) {
+                            $warn = "[$row, " . $this->columnDefines[$col]['name'] . "] must be STRING";
+                        }
+                        break;
+                    case "int":
+                        if (!self::isTypeInt($cell)) {
+                            $warn = "[$row, " . $this->columnDefines[$col]['name'] . "] must be INT";
+                        }
+                        break;
+                    case "float":
+                        if (!self::isTypeFloat($cell)) {
+                            $warn = "[$row, " . $this->columnDefines[$col]['name'] . "] must be FLOAT";
+                        }
+                        break;
+                    case "date":
+                        if (!self::isTypeDate($cell)) {
+                            $warn = "[$row, " . $this->columnDefines[$col]['name'] . "] must be DATE";
+                        }
+                        break;
+                    case "time":
+                        if (!self::isTypeTime($cell)) {
+                            $warn = "[$row, " . $this->columnDefines[$col]['name'] . "] must be TIME";
+                        }
+                        break;
+                }
+
+                if ($warn) {
+                    $warn = $warn . " (which is `" . $cell->getValue() . "`)";
+                }
+            }
         }
 
         return $warn;
@@ -206,8 +245,80 @@ class ExcelReader {
      * @param $cell PHPExcel_Cell
      * @return bool
      */
-    private function isTypeNull($cell) {
-        return ($cell->getDataType() == PHPExcel_Cell_DataType::TYPE_NULL || $cell->getValue() == 'NULL');
+    private static function isTypeNull($cell) {
+        $value = strtoupper($cell->getValue());
+        return ($cell->getDataType() == PHPExcel_Cell_DataType::TYPE_NULL || $value == "NULL" || $value == "");
+    }
+
+    /**
+     * Whether the data type of cell is string
+     *
+     * @param $cell PHPExcel_Cell
+     * @return bool
+     */
+    private static function isTypeString($cell) {
+        return !self::isTypeNull($cell);
+    }
+
+    /**
+     * Whether the data type of cell is integer
+     *
+     * @param $cell PHPExcel_Cell
+     * @return bool
+     */
+    private static function isTypeInt($cell) {
+        if (self::isTypeFloat($cell)) {
+            $value = $cell->getValue();
+            return !preg_match("/\./", $value);
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Whether the data type fo cell is float (including integer)
+     *
+     * @param $cell PHPExcel_Cell
+     * @return bool
+     */
+    private static function isTypeFloat($cell) {
+        return ($cell->getDataType() == PHPExcel_Cell_DataType::TYPE_NUMERIC || is_numeric($cell->getValue()));
+    }
+
+    /**
+     * Whether the data type of cell is date
+     *
+     * Data is a string formatted like "YYYY/MM/DD" with optional time "HH:MM:SS"
+     *
+     * @param $cell PHPExcel_Cell
+     * @return bool
+     */
+    private static function isTypeDate($cell) {
+        $subject = $cell->getValue();
+        $pattern = "/^[0-9]{4}(\-|\/)[0-9]{1,2}(\\1)[0-9]{1,2}(|\s+[0-9]{1,2}(|:[0-9]{1,2}(|:[0-9]{1,2})))$/";
+        if (preg_match($pattern, $subject) && strtotime($subject)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Whether the data type of cell is time
+     *
+     * Time is a string formatted like "YYYY/MM/DD HH:MM:SS"
+     *
+     * @param $cell PHPExcel_Cell
+     * @return bool
+     */
+    private static function isTypeTime($cell) {
+        $subject = $cell->getValue();
+        $pattern = "/^[0-9]{4}(\-|\/)[0-9]{1,2}(\\1)[0-9]{1,2}\s+[0-9]{1,2}:[0-9]{1,2}:[0-9]{1,2}$/";
+        if (preg_match($pattern, $subject) && strtotime($subject)) {
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 
