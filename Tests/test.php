@@ -19,7 +19,7 @@ $columnDefines = array(
     array(
         'required' => true,
         'type' => 'int',
-        'name' => 'id',
+        'name' => 'databaseId',
         'key' => 'c1',
     ),
 
@@ -58,13 +58,17 @@ $columnDefines = array(
     ),
 );
 
+$columnMappings = array(
+    "id" => "databaseId",
+);
+
 $testFiles = array('test_0.csv', 'test_1.csv');
 
 $callStartTime = microtime(true);
 
 foreach ($testFiles as $file) {
     echo "---------------------- Reading $file -------------------------" . EOL;
-    $reader = new ExcelReader($file, $columnDefines);
+    $reader = new ExcelReader($file, $columnDefines, $columnMappings);
     $headers = $reader->getHeaders();
 
     echo "The headers of $file are: ";

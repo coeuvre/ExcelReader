@@ -212,7 +212,11 @@ class ExcelReader {
                 continue;
             }
 
-            if ($this->columnDefines[$i]['name'] != $this->headers[$i]) {
+            $header = $this->headers[$i];
+            if (isset($this->columnMappings[$header])) {
+                $header = $this->columnMappings[$header];
+            }
+            if ($this->columnDefines[$i]['name'] != $header) {
                 if ($this->columnDefines[$i]['required'] == true) {
                     $errors[] = "Can't find column `" . $this->columnDefines[$i]['name'] . "`";
                 }
