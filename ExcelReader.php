@@ -52,8 +52,7 @@ class ExcelReader {
      *                                      "key"       => string
      *                                  }
      * @param array     $columnMappings array of {
-     *                                      "systemName" => string
-     *                                      "displayName" => string
+     *                                      "systemName" =>  "displayName"
      *                                  }
      */
     public function __construct($file, $columnDefines, $columnMappings = null) {
