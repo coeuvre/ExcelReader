@@ -34,28 +34,32 @@ class ExcelReader {
 
     private $file;
     private $columnDefines;
-    private $step;
+    private $columnMappings;
 
     private $finished = false;
     private $pos = self::FIRST_ROW;
     private $reader;
 
     private $columnExisted = array();
+    private $headers = null;
 
     /**
      * @param string    $file           filename of an excel file
-     * @param array     $columnDefines  {
+     * @param array     $columnDefines  array of {
      *                                      "required"  => true | false,
      *                                      "type"      => "string" | "int" | "float" | "date" | "time"
      *                                      "name"      => string
      *                                      "key"       => string
      *                                  }
-     * @param integer   $step           optional, how many rows the reader read each time.
+     * @param array     $columnMappings array of {
+     *                                      "systemName" => string
+     *                                      "displayName" => string
+     *                                  }
      */
-    public function __construct($file, $columnDefines, $step = 1024) {
+    public function __construct($file, $columnDefines, $columnMappings = null) {
         $this->file = $file;
         $this->columnDefines = $columnDefines;
-        $this->step = $step;
+        $this->columnMappings =  $columnMappings;
 
         $this->reader = PHPExcel_IOFactory::createReaderForFile($file);
         //$this->reader->setReadDataOnly(true);
@@ -80,9 +84,14 @@ class ExcelReader {
     /**
      * Read the excel file partially
      *
-     * @return array
+     * @param integer   $step   optional, how many rows read
+     * @return array    {
+     *                      'list'  => array of rows
+     *                      'warn'  => array of warning messages
+     *                      'error' => array of error messages
+     *                  }
      */
-    public function read() {
+    public function read($step = 1024) {
         if ($this->finished) {
             return null;
         }
@@ -93,17 +102,29 @@ class ExcelReader {
             'warn' => array(),
         );
 
-        $end = $this->pos + $this->step;
         if ($this->pos == self::FIRST_ROW) {
-            // the first line is title, read one more row
-            $end += 1;
+            if ($this->headers == null) {
+                $this->readHeaders();
+            }
+            // skip the first row
+            $this->pos += 1;
+
+            // parse the title
+            $result['error'] = $this->parseHeaders();
+
+            if (count($result['error'])) {
+                $this->finished = true;
+                return $result;
+            }
         }
+        $end = $this->pos + $step;
 
         // load rows into memory
         $this->reader->setReadFilter(new RowRangedReadFilter($this->pos, $end));
         $excel = $this->reader->load($this->file);
 
         $worksheet = $excel->getActiveSheet();
+
         $highestRow = $worksheet->getHighestRow();
         if ($highestRow + 1 < $end) {
             $this->finished = true;
@@ -111,21 +132,6 @@ class ExcelReader {
 
         $highestColumn = $worksheet->getHighestColumn();
         $highestColumn = PHPExcel_Cell::columnIndexFromString($highestColumn);
-
-        // parse the title
-        if ($this->pos == self::FIRST_ROW) {
-            $titles = array();
-            for ($col = 0; $col <= $highestColumn; ++$col) {
-                $titles[] = $worksheet->getCellByColumnAndRow($col, self::FIRST_ROW)->getValue();
-            }
-            $result['error'] = $this->parseTitle($titles);
-            $this->pos += 1;
-        }
-
-        if (count($result['error'])) {
-            $this->finished = true;
-            return $result;
-        }
 
         // read the data into `result`
         for ($row = $this->pos; $row <= $highestRow; ++$row) {
@@ -156,12 +162,43 @@ class ExcelReader {
     }
 
     /**
+     * Get the headers of the excel
+     *
+     * @return array
+     */
+    public function getHeaders() {
+        if ($this->headers == null) {
+            assert($this->pos == self::FIRST_ROW);
+            $this->readHeaders();
+        }
+        return $this->headers;
+    }
+
+    /**
+     * Read the headers into $this->headers
+     */
+    private function readHeaders() {
+        $this->reader->setReadFilter(new RowRangedReadFilter(self::FIRST_ROW, self::FIRST_ROW + 1));
+        $excel = $this->reader->load($this->file);
+
+        $worksheet = $excel->getActiveSheet();
+
+        $highestColumn = $worksheet->getHighestColumn();
+        $highestColumn = PHPExcel_Cell::columnIndexFromString($highestColumn);
+
+        $this->headers = array();
+        for ($col = 0; $col <= $highestColumn; ++$col) {
+            $this->headers[] = $worksheet->getCellByColumnAndRow($col, self::FIRST_ROW)->getValue();
+        }
+    }
+
+    /**
      * Check the title of excel according to `columnDefines`
      *
      * @param $titles array     the titles in excel
      * @return array            error messages
      */
-    private function parseTitle($titles) {
+    private function parseHeaders() {
         $errors = array();
 
         for ($i = 0; $i < count($this->columnDefines); ++$i) {
@@ -169,13 +206,13 @@ class ExcelReader {
                 $this->columnDefines[$i]['key'] = $this->columnDefines[$i]['name'];
             }
 
-            if ($i >= count($titles)) {
+            if ($i >= count($this->headers)) {
                 $errors[] = "Can't find column `" . $this->columnDefines[$i]['name'] . "`";
                 $this->columnExisted[$i] = false;
                 continue;
             }
 
-            if ($this->columnDefines[$i]['name'] != $titles[$i]) {
+            if ($this->columnDefines[$i]['name'] != $this->headers[$i]) {
                 if ($this->columnDefines[$i]['required'] == true) {
                     $errors[] = "Can't find column `" . $this->columnDefines[$i]['name'] . "`";
                 }

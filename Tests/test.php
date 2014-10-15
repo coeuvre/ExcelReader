@@ -65,6 +65,14 @@ $callStartTime = microtime(true);
 foreach ($testFiles as $file) {
     echo "---------------------- Reading $file -------------------------" . EOL;
     $reader = new ExcelReader($file, $columnDefines);
+    $headers = $reader->getHeaders();
+
+    echo "The headers of $file are: ";
+    foreach ($headers as $header) {
+        echo $header . '  ';
+    }
+    echo EOL;
+
     while (!$reader->finished()) {
         $data = $reader->read();
 
